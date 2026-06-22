@@ -2,6 +2,9 @@ symbols:
   - BTC/USDT
   - ETH/USDT
   - SOL/USDT
+  - DOGE/USDT
+  - LINK/USDT
+  - BNB/USDT
 
 timeframes:
   - 1h

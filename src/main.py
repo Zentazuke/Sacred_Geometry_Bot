@@ -82,6 +82,17 @@ def cmd_backfill(settings, args):
             print(f"{symbol} {tf}: {len(df)} candles ({yrs}), {len(gaps)} gaps")
 
 
+def cmd_sweep(settings, args):
+    from src.research import sweep
+
+    result = sweep.run(settings, args.synthetic, horizon=args.horizon)
+    text = sweep.build_report(result)
+    out_path = Path(settings.path("duckdb_path")).parent / "reports" / "MYTH_DETECTOR.md"
+    reports.write_report(text, out_path)
+    print(text)
+    print(f"\nReport written to: {out_path}")
+
+
 def cmd_backtest(settings, args):
     from src.backtest.engine import BacktestParams
     from src.backtest import runner
@@ -203,6 +214,11 @@ def main(argv=None):
     p_t.add_argument("--max-hold", type=int, default=50, dest="max_hold")
     p_t.add_argument("--min-rr", type=float, default=0.0, dest="min_rr")
     p_t.set_defaults(func=cmd_backtest)
+
+    p_s = sub.add_parser("sweep", help="grid coins x timeframes x geometry; myth detector")
+    p_s.add_argument("--synthetic", action="store_true", help="use offline generated candles")
+    p_s.add_argument("--horizon", type=int, default=10, help="forward bars for bounce metric")
+    p_s.set_defaults(func=cmd_sweep)
 
     args = parser.parse_args(argv)
     settings = load_settings()

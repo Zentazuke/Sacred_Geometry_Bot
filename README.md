@@ -15,7 +15,8 @@ testnet — but only after the research engine proves an idea deserves it.
 - **Market structure** — causal features (ATR, vol, regimes) + fractal & ZigZag
   pivots with explicit confirmation delay, so geometry stays lookahead-free
   (`src/market_structure`)
-- **Geometry** — Fibonacci retracement + golden-pocket event detection
+- **Geometry** — Fibonacci retracement + golden-pocket detection, and
+  ATR-normalised **Gann angles** (fan from pivots, tested vs random slopes)
   (`src/geometry`)
 - **Controls** — random zones, fixed 0.5/0.7 zones, scrambled ratios, random
   entries (`src/signals/controls.py`)
@@ -27,8 +28,12 @@ testnet — but only after the research engine proves an idea deserves it.
   Sharpe/Sortino, Calmar, max drawdown), chronological walk-forward and
   in/out-of-sample split, vs a random-entry control and buy-and-hold
   (`src/backtest`)
-- **Tests** — pivots, Fibonacci, outcome labelling, backtest engine + metrics
-  (`tests/`, 14 tests)
+- **Myth Detector sweep** — grids {coin × timeframe × geometry variant},
+  scores each against a *pooled* random control (random bands / random slopes,
+  averaged over many draws), with bootstrap CIs and a Bonferroni multiple-testing
+  bar (`src/research/sweep.py`)
+- **Tests** — pivots, Fibonacci, Gann, outcome labelling, backtest engine +
+  metrics (`tests/`, 16 tests)
 
 ## Quick start
 
@@ -47,7 +52,27 @@ python -m venv .venv
 # Phase 8 — backtest golden-pocket TRADES after fees + slippage:
 .venv/Scripts/python.exe -m src.main backtest
 .venv/Scripts/python.exe -m src.main backtest --min-rr 1.5 --fee-bps 10 --slippage-bps 5
+
+# Myth Detector — sweep every coin x timeframe x geometry variant:
+.venv/Scripts/python.exe -m src.main sweep
 ```
+
+### Myth Detector findings (6 coins: BTC/ETH/SOL/DOGE/LINK/BNB, 1h + 4h, 1.4–5.5y)
+
+> **No geometry survived multiple-testing correction.** 70 combinations were
+> scored against pooled random controls.
+> - **Fibonacci is dead** — golden pocket and every other retracement band show
+>   no bounce edge vs random bands, on any coin or timeframe.
+> - **Gann's 1h fan is the one near-miss**: +1.3pp favourable-bounce edge vs
+>   *random slopes*, pooled across all coins (CI [+0.5,+2.1], p=0.001, n≈21k),
+>   consistent across ETH/LINK individually. It clears the naive 5% bar but
+>   **not** the Bonferroni bar (0.0007), only appears on 1h (4h: nothing), and a
+>   1.3pp edge on a bounce *rate* won't survive trading costs — it's a lead to
+>   retest out-of-sample, not a tradable edge.
+>
+> A cautionary tale lives in the git history: an early single-draw control
+> flagged a fake +3.5pp "hit" on SOL 1h that **evaporated** once the control was
+> averaged over many random draws. Control quality is everything.
 
 ### What the backtest found (BTC/ETH/SOL, 1h + 4h, ~1.4–5.5y, 0.30% round-trip cost)
 
@@ -104,10 +129,10 @@ labeller, and backtest engine unchanged.
 config/        settings, symbols, experiment definitions (YAML)
 src/data/      exchange client, collector, parquet+duckdb store, synthetic gen
 src/market_structure/  features, pivots
-src/geometry/  base interface, fibonacci
+src/geometry/  base interface, fibonacci, gann
 src/signals/   controls / baselines
-src/research/  outcome labeller, stats, reports
+src/research/  outcome labeller, stats, reports, sweep (myth detector)
 src/backtest/  trade engine, metrics, walk-forward, runner
-src/main.py    CLI: backfill | observe | experiment001 | backtest
+src/main.py    CLI: backfill | observe | experiment001 | backtest | sweep
 tests/         pytest suite
 ```
