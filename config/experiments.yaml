@@ -1,0 +1,19 @@
+# Experiment definitions. Each is a strict, falsifiable hypothesis with controls.
+
+EXP_001_GOLDEN_POCKET:
+  hypothesis: >
+    Price entering the 0.618-0.786 Fibonacci retracement zone of a confirmed
+    swing bounces (favourable forward return) more often than it does at random
+    or scrambled retracement zones.
+  geometry: fibonacci
+  pivot_method: zigzag          # zigzag | fractal
+  golden_pocket: [0.618, 0.786]
+  horizons: [1, 3, 5, 10, 20, 50]
+  controls:
+    - random_zone               # random band, same width, in 0.2-0.9
+    - fixed_zone_0.5            # the 0.5 retracement
+    - fixed_zone_0.7           # a "round" 0.7 retracement
+    - scrambled_ratios          # golden pocket with randomised ratios
+  success_condition: >
+    Golden-pocket favourable-bounce rate (10 bars) must beat every control by a
+    margin whose bootstrap 95% CI excludes zero, with >= 200 events.

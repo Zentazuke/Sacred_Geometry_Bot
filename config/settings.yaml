@@ -1,0 +1,29 @@
+# Global bot settings. Mode is one of: observer | backtest | testnet
+mode: observer
+
+exchange:
+  name: binance
+  sandbox: true          # use testnet endpoints when trading; market data stays public
+
+storage:
+  raw_dir: data/raw/candles_parquet
+  processed_dir: data/processed/features_parquet
+  duckdb_path: data/research.duckdb
+
+pivots:
+  # fractal pivot strengths (left/right bars). Right bars => confirmation delay.
+  minor:  {left: 3,  right: 3}
+  medium: {left: 5,  right: 5}
+  major:  {left: 10, right: 10}
+  # zigzag reversal threshold, expressed in ATR units
+  zigzag_atr_mult: 2.0
+  atr_period: 14
+
+risk:
+  max_risk_per_trade: 0.005
+  max_open_positions: 3
+  max_daily_drawdown: 0.03
+
+# Hard safety: research bot must never touch real money.
+safety:
+  allow_live_trading: false

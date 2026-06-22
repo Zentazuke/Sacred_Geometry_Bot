@@ -1,0 +1,13 @@
+# data artifacts (all generated; nothing under data/ is source)
+data/
+*.duckdb
+*.parquet
+
+# env / secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

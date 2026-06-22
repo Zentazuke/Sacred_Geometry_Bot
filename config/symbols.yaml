@@ -1,0 +1,11 @@
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT
+
+timeframes:
+  - 1h
+  - 4h
+
+# how many candles to backfill per (symbol, timeframe) on a fresh harvest
+backfill_limit: 5000

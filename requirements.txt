@@ -1,0 +1,15 @@
+# Sacred Geometry Bot — MVP (Observer + Research loop)
+# Pinned loosely; tested against the versions noted in comments.
+ccxt>=4.5            # unified crypto market/trade API (Binance spot + testnet)
+pandas>=2.0          # candle / feature frames
+numpy>=1.26          # math
+pyyaml>=6.0          # config files
+python-dotenv>=1.0   # .env loading
+duckdb>=0.10         # research queries over parquet
+pyarrow>=14.0        # parquet read/write
+pytest>=7.0          # tests
+
+# --- Phase 8+ (not required for the MVP, add when you get there) ---
+# vectorbt           # signal backtests
+# streamlit          # dashboard
+# plotly             # charts
