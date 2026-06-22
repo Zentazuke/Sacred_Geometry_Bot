@@ -33,7 +33,7 @@ testnet — but only after the research engine proves an idea deserves it.
   averaged over many draws), with bootstrap CIs and a Bonferroni multiple-testing
   bar (`src/research/sweep.py`)
 - **Tests** — pivots, Fibonacci, Gann, harmonics, outcome labelling, signal
-  refinement, backtest engine + metrics (`tests/`, 23 tests)
+  refinement, backtest engine + metrics (`tests/`, 25 tests)
 
 ## Quick start
 
@@ -57,7 +57,25 @@ python -m venv .venv
 
 # Myth Detector — sweep every coin x timeframe x geometry variant:
 .venv/Scripts/python.exe -m src.main sweep
+
+# Leaderboard — backtest & RANK every coin x timeframe x geometry:
+.venv/Scripts/python.exe -m src.main rank          # improved rule, 12 coins
 ```
+
+### Leaderboard: which combination performs best? (12 coins, 2 tf, 3 geometries)
+
+> Best by raw expectancy: **SOL/USDT 4h Gann, +0.446R/trade, +782% total** — and
+> it's the *one* combo whose geometry also beats its own-market random baseline
+> (+0.151R) and holds out-of-sample. Tempting.
+>
+> But the `geo edge` column (expectancy minus the **same coin/timeframe** random
+> baseline under the identical rule) exposes the truth: the leaderboard's top
+> rows are **4h on coins that trended hard** — their random baselines are already
+> +0.2 to +0.35R, so it's trend-following, not geometry. Only **9/48** combos beat
+> their own market's random baseline (chance predicts ~24 under zero edge), and
+> **4/48** hold out-of-sample — both *consistent with zero real geometry edge*.
+> SOL 4h Gann is most likely the 1-in-48 survivor of selection bias, not a
+> discovery. (`src/research/leaderboard.py`)
 
 ### Can the rule be improved? Yes — but the geometry still adds nothing
 

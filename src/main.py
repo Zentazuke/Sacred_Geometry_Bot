@@ -74,12 +74,31 @@ def cmd_backfill(settings, args):
     limit = args.limit or settings.backfill_limit
     for symbol in settings.symbols:
         for tf in settings.timeframes:
-            df = collector.backfill(symbol, tf, limit=limit)
+            try:
+                df = collector.backfill(symbol, tf, limit=limit)
+            except Exception as exc:  # one bad/illiquid symbol shouldn't kill the run
+                print(f"{symbol} {tf}: SKIPPED ({type(exc).__name__}: {exc})")
+                continue
             store.upsert_candles(symbol, tf, df)
             gaps = find_gaps(df, tf)
             span = (df["timestamp"].iloc[-1] - df["timestamp"].iloc[0]) if len(df) else None
             yrs = f"{span.days / 365:.2f}y" if span is not None else "—"
             print(f"{symbol} {tf}: {len(df)} candles ({yrs}), {len(gaps)} gaps")
+
+
+def cmd_rank(settings, args):
+    from src.backtest.engine import BacktestParams
+    from src.research import leaderboard
+
+    kw = dict(leaderboard.IMPROVED) if args.rule == "improved" else {}
+    params = BacktestParams(**kw)
+    geoms = leaderboard.GEOMETRIES if args.geometry == "all" else [args.geometry]
+    result = leaderboard.rank(settings, args.synthetic, params, geometries=geoms)
+    text = leaderboard.build_report(result)
+    out_path = Path(settings.path("duckdb_path")).parent / "reports" / "LEADERBOARD.md"
+    reports.write_report(text, out_path)
+    print(text)
+    print(f"\nReport written to: {out_path}")
 
 
 def cmd_sweep(settings, args):
@@ -234,6 +253,14 @@ def main(argv=None):
     p_s.add_argument("--synthetic", action="store_true", help="use offline generated candles")
     p_s.add_argument("--horizon", type=int, default=10, help="forward bars for bounce metric")
     p_s.set_defaults(func=cmd_sweep)
+
+    p_r = sub.add_parser("rank", help="backtest every coin x timeframe x geometry, ranked")
+    p_r.add_argument("--synthetic", action="store_true", help="use offline generated candles")
+    p_r.add_argument("--rule", choices=["improved", "naive"], default="improved",
+                     help="trade rule: improved trend-following (default) or raw geometry")
+    p_r.add_argument("--geometry", choices=["all", "golden_pocket", "gann", "harmonics"],
+                     default="all")
+    p_r.set_defaults(func=cmd_rank)
 
     args = parser.parse_args(argv)
     settings = load_settings()
