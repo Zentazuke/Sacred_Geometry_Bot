@@ -19,6 +19,7 @@ from ..geometry.gann import gann_events
 from ..market_structure.features import add_features
 from ..market_structure.pivots import detect_pivots
 from ..signals.controls import build_controls
+from ..signals.signal_engine import refine_events
 from .engine import BacktestParams, simulate_trades
 from .metrics import compute_metrics
 from .walk_forward import in_out_of_sample, segment_metrics
@@ -60,6 +61,7 @@ def run(settings, synthetic: bool, params: BacktestParams,
             pivots = detect_pivots(feat, symbol, tf, pivot_method, settings.pivots)
 
             events = _make_events(geometry, feat, symbol, tf, pivots)
+            events = refine_events(events, feat, params)
             strat_trades.append(simulate_trades(events, feat, params))
 
             controls = build_controls(feat, symbol, tf, pivots, ["random_entry"],

@@ -34,6 +34,13 @@ class BacktestParams:
     max_hold: int = 50             # bars before a timeout exit at close
     min_rr: float = 0.0            # skip trades whose planned reward:risk < this
 
+    # --- trade-rule improvements (off by default; see signals.signal_engine) ---
+    trend_filter: bool = False     # only trade in the direction of the trend regime
+    confirm: bool = False          # require a rejection close back out of the zone
+    atr_stop_floor: float = 0.0    # widen stop to at least this many ATRs from entry
+    stop_buffer_atr: float = 0.0   # push stop this many ATRs beyond the swing origin
+    target_r: float = 0.0          # if >0, target = entry +/- target_r * risk (else geometry)
+
     @property
     def round_trip_cost(self) -> float:
         return 2.0 * (self.fee_bps + self.slippage_bps) / 1e4

@@ -49,13 +49,29 @@ python -m venv .venv
 .venv/Scripts/python.exe -m src.main backfill            # ~1.4y of 1h, 5.5y of 4h
 .venv/Scripts/python.exe -m src.main experiment001
 
-# Phase 8 — backtest golden-pocket TRADES after fees + slippage:
-.venv/Scripts/python.exe -m src.main backtest
-.venv/Scripts/python.exe -m src.main backtest --min-rr 1.5 --fee-bps 10 --slippage-bps 5
+# Phase 8 — backtest TRADES after fees + slippage (golden_pocket or gann):
+.venv/Scripts/python.exe -m src.main backtest --geometry gann
+# improved trend-following rule (trend filter + wide stops + let winners run):
+.venv/Scripts/python.exe -m src.main backtest --geometry gann --trend-filter \
+    --confirm --atr-stop-floor 4 --target-r 4 --max-hold 200 --min-rr 2
 
 # Myth Detector — sweep every coin x timeframe x geometry variant:
 .venv/Scripts/python.exe -m src.main sweep
 ```
+
+### Can the rule be improved? Yes — but the geometry still adds nothing
+
+The naive rule loses (−0.59R). Adding the plan's own improvements — **trend filter,
+rejection-confirmation, ATR-floored wide stops, and big R-multiple targets (let
+winners run)** — walks expectancy all the way to **positive** (+0.05R golden
+pocket, +0.07R gann, PF ~1.1, 4/6 coins green). Tempting!
+
+But the decisive control kills it: apply the **same rules to random entries** and
+they do just as well (+0.05R). Golden pocket is actually *worse* than random
+(−0.007R edge); gann's +0.017R edge **collapses out-of-sample** (+0.13R →
++0.015R). So the positive expectancy is generic **trend-following risk
+management**, not the geometry. The levels never earned their keep — exactly what
+the controls exist to prove. (`src/signals/signal_engine.py`)
 
 ### Myth Detector findings (6 coins: BTC/ETH/SOL/DOGE/LINK/BNB, 1h + 4h, 1.4–5.5y)
 

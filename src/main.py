@@ -99,7 +99,9 @@ def cmd_backtest(settings, args):
 
     params = BacktestParams(fee_bps=args.fee_bps, slippage_bps=args.slippage_bps,
                             risk_pct=args.risk_pct, max_hold=args.max_hold,
-                            min_rr=args.min_rr)
+                            min_rr=args.min_rr, trend_filter=args.trend_filter,
+                            confirm=args.confirm, atr_stop_floor=args.atr_stop_floor,
+                            stop_buffer_atr=args.stop_buffer_atr, target_r=args.target_r)
     result = runner.run(settings, args.synthetic, params, geometry=args.geometry)
     text = runner.build_report(result)
     out_path = (Path(settings.path("duckdb_path")).parent / "reports"
@@ -216,6 +218,16 @@ def main(argv=None):
     p_t.add_argument("--min-rr", type=float, default=0.0, dest="min_rr")
     p_t.add_argument("--geometry", choices=["golden_pocket", "gann"],
                      default="golden_pocket", help="which geometry to trade")
+    p_t.add_argument("--trend-filter", action="store_true", dest="trend_filter",
+                     help="only trade with the trend regime")
+    p_t.add_argument("--confirm", action="store_true",
+                     help="require a rejection close back out of the zone")
+    p_t.add_argument("--atr-stop-floor", type=float, default=0.0, dest="atr_stop_floor",
+                     help="widen stop to at least this many ATRs from entry")
+    p_t.add_argument("--stop-buffer-atr", type=float, default=0.0, dest="stop_buffer_atr",
+                     help="push stop this many ATRs beyond the swing origin")
+    p_t.add_argument("--target-r", type=float, default=0.0, dest="target_r",
+                     help="target = entry +/- target_r * risk (else geometry terminal)")
     p_t.set_defaults(func=cmd_backtest)
 
     p_s = sub.add_parser("sweep", help="grid coins x timeframes x geometry; myth detector")
