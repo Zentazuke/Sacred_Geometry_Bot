@@ -15,9 +15,9 @@ testnet — but only after the research engine proves an idea deserves it.
 - **Market structure** — causal features (ATR, vol, regimes) + fractal & ZigZag
   pivots with explicit confirmation delay, so geometry stays lookahead-free
   (`src/market_structure`)
-- **Geometry** — Fibonacci retracement + golden-pocket detection, and
-  ATR-normalised **Gann angles** (fan from pivots, tested vs random slopes)
-  (`src/geometry`)
+- **Geometry** — three families: Fibonacci golden pocket, ATR-normalised **Gann
+  angles** (vs random slopes), and **harmonic patterns** (Gartley/Bat/Butterfly/
+  Crab, vs a coin-flip-direction control) (`src/geometry`)
 - **Controls** — random zones, fixed 0.5/0.7 zones, scrambled ratios, random
   entries (`src/signals/controls.py`)
 - **Research** — outcome labeller (directional forward returns, MFE/MAE, TP/SL
@@ -32,8 +32,8 @@ testnet — but only after the research engine proves an idea deserves it.
   scores each against a *pooled* random control (random bands / random slopes,
   averaged over many draws), with bootstrap CIs and a Bonferroni multiple-testing
   bar (`src/research/sweep.py`)
-- **Tests** — pivots, Fibonacci, Gann, outcome labelling, backtest engine +
-  metrics (`tests/`, 16 tests)
+- **Tests** — pivots, Fibonacci, Gann, harmonics, outcome labelling, signal
+  refinement, backtest engine + metrics (`tests/`, 23 tests)
 
 ## Quick start
 
@@ -75,10 +75,14 @@ the controls exist to prove. (`src/signals/signal_engine.py`)
 
 ### Myth Detector findings (6 coins: BTC/ETH/SOL/DOGE/LINK/BNB, 1h + 4h, 1.4–5.5y)
 
-> **No geometry survived multiple-testing correction.** 70 combinations were
-> scored against pooled random controls.
+> **No geometry survived multiple-testing correction.** 84 combinations (6
+> variants × 6 coins × 2 timeframes, pooled + per-market) scored against pooled
+> random controls.
 > - **Fibonacci is dead** — golden pocket and every other retracement band show
 >   no bounce edge vs random bands, on any coin or timeframe.
+> - **Harmonics are too rare to judge** — strict Gartley/Bat/Butterfly/Crab
+>   ratios fire only ~100 times across all six coins over years, so every result
+>   is "thin" (CI ±15-20pp). Absence of evidence, not evidence of edge.
 > - **Gann's 1h fan is the one near-miss**: +1.3pp favourable-bounce edge vs
 >   *random slopes*, pooled across all coins (CI [+0.5,+2.1], p=0.001, n≈21k),
 >   consistent across ETH/LINK individually. It clears the naive 5% bar but
@@ -145,8 +149,8 @@ labeller, and backtest engine unchanged.
 config/        settings, symbols, experiment definitions (YAML)
 src/data/      exchange client, collector, parquet+duckdb store, synthetic gen
 src/market_structure/  features, pivots
-src/geometry/  base interface, fibonacci, gann
-src/signals/   controls / baselines
+src/geometry/  base interface, fibonacci, gann, harmonics
+src/signals/   controls / baselines, signal_engine (trade-rule refinements)
 src/research/  outcome labeller, stats, reports, sweep (myth detector)
 src/backtest/  trade engine, metrics, walk-forward, runner
 src/main.py    CLI: backfill | observe | experiment001 | backtest | sweep

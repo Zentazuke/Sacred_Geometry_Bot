@@ -216,7 +216,7 @@ def main(argv=None):
     p_t.add_argument("--risk-pct", type=float, default=0.005, dest="risk_pct")
     p_t.add_argument("--max-hold", type=int, default=50, dest="max_hold")
     p_t.add_argument("--min-rr", type=float, default=0.0, dest="min_rr")
-    p_t.add_argument("--geometry", choices=["golden_pocket", "gann"],
+    p_t.add_argument("--geometry", choices=["golden_pocket", "gann", "harmonics"],
                      default="golden_pocket", help="which geometry to trade")
     p_t.add_argument("--trend-filter", action="store_true", dest="trend_filter",
                      help="only trade with the trend regime")

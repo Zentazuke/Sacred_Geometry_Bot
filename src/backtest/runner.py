@@ -16,6 +16,7 @@ from ..data.exchange_client import ExchangeClient
 from ..data.synthetic import generate_candles
 from ..geometry.fibonacci import golden_pocket_events
 from ..geometry.gann import gann_events
+from ..geometry.harmonics import harmonic_events
 from ..market_structure.features import add_features
 from ..market_structure.pivots import detect_pivots
 from ..signals.controls import build_controls
@@ -40,6 +41,8 @@ def _get_candles(settings, store, symbol, timeframe, synthetic, synth_n=10000):
 def _make_events(geometry, feat, symbol, tf, pivots):
     if geometry == "gann":
         return gann_events(feat, symbol, tf, pivots)
+    if geometry == "harmonics":
+        return harmonic_events(feat, symbol, tf, pivots)
     return golden_pocket_events(feat, symbol, tf, pivots)
 
 

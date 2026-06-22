@@ -17,6 +17,7 @@ from ..data.candle_store import CandleStore
 from ..geometry.base import legs_from_pivots
 from ..geometry.fibonacci import detect_zone_events
 from ..geometry.gann import gann_events
+from ..geometry.harmonics import harmonic_events
 from ..market_structure.features import add_features
 from ..market_structure.pivots import detect_pivots
 from . import stats
@@ -32,6 +33,7 @@ VARIANTS = [
     {"name": "fib_mid_0.500-0.618", "kind": "fib", "lo": 0.5, "hi": 0.618},
     {"name": "fib_shallow_0.382-0.500", "kind": "fib", "lo": 0.382, "hi": 0.5},
     {"name": "gann_fan", "kind": "gann"},
+    {"name": "harmonics", "kind": "harmonics"},
 ]
 
 
@@ -62,11 +64,16 @@ def _gen(variant, feat, symbol, tf, pivots, legs, rng):
         ev = detect_zone_events(feat, symbol, tf, legs, lo, hi, subtype=variant["name"])
         for _ in range(CONTROL_DRAWS):
             draws.append(_random_band(feat, symbol, tf, legs, hi - lo, rng))
-    else:  # gann: real fan vs pooled random-slope fans
+    elif variant["kind"] == "gann":  # real fan vs pooled random-slope fans
         ev = gann_events(feat, symbol, tf, pivots, subtype="gann")
         for k in range(CONTROL_DRAWS):
             draws.append(gann_events(feat, symbol, tf, pivots, random_slopes=True,
                                      seed=1000 + k, control_kind="random_slopes"))
+    else:  # harmonics: real reversal calls vs same D-points, coin-flip direction
+        ev = harmonic_events(feat, symbol, tf, pivots, subtype="harmonic")
+        for k in range(CONTROL_DRAWS):
+            draws.append(harmonic_events(feat, symbol, tf, pivots, random_direction=True,
+                                         seed=2000 + k, control_kind="coin_flip"))
     return ev, _concat(draws)
 
 
@@ -201,10 +208,11 @@ def build_report(result: dict) -> str:
                  f"control with a CI excluding zero AND p below the Bonferroni bar. Worth a "
                  f"dedicated out-of-sample backtest before believing it.")
     else:
-        L.append("NO pattern survived multiple-testing correction. Across 6 coins, 2 "
-                 "timeframes and 5 geometry variants, none produced a bounce edge robust "
-                 "enough to clear the Bonferroni bar. The wizard robe stays in the closet — "
-                 "exactly the outcome the controls exist to enforce.")
+        L.append(f"NO pattern survived multiple-testing correction. Across "
+                 f"{len(result['coins'])} coins, {len(result['timeframes'])} timeframes and "
+                 f"{len(result['variants'])} geometry variants, none produced a bounce edge "
+                 f"robust enough to clear the Bonferroni bar. The wizard robe stays in the "
+                 f"closet — exactly the outcome the controls exist to enforce.")
         # surface the strongest sub-threshold lead so it isn't buried
         leads = [r for r in result["pooled"]
                  if r["n_ev"] >= MIN_EVENTS and r["ci_low"] > 0]
