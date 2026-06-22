@@ -9,7 +9,7 @@ testnet — but only after the research engine proves an idea deserves it.
 > (testnet/paper only, gated behind `ALLOW_LIVE_TRADING`). This MVP ships the
 > Historian and the Scientist. The Trader is intentionally not wired up yet.
 
-## What's built (MVP — Phases 1–7)
+## What's built (Phases 1–8)
 
 - **Data** — CCXT Binance candle harvest → Parquet + DuckDB (`src/data`)
 - **Market structure** — causal features (ATR, vol, regimes) + fractal & ZigZag
@@ -22,7 +22,13 @@ testnet — but only after the research engine proves an idea deserves it.
 - **Research** — outcome labeller (directional forward returns, MFE/MAE, TP/SL
   resolution), bootstrap + permutation stats, honest markdown report
   (`src/research`)
-- **Tests** — pivots, Fibonacci, outcome labelling (`tests/`)
+- **Backtest (Phase 8)** — event-driven trade simulator with next-bar-open
+  entries, fees + slippage, risk-normalised metrics (expectancy, profit factor,
+  Sharpe/Sortino, Calmar, max drawdown), chronological walk-forward and
+  in/out-of-sample split, vs a random-entry control and buy-and-hold
+  (`src/backtest`)
+- **Tests** — pivots, Fibonacci, outcome labelling, backtest engine + metrics
+  (`tests/`, 14 tests)
 
 ## Quick start
 
@@ -35,9 +41,27 @@ python -m venv .venv
 .venv/Scripts/python.exe -m src.main experiment001 --synthetic
 
 # run against real Binance data (public, keyless):
-.venv/Scripts/python.exe -m src.main backfill
+.venv/Scripts/python.exe -m src.main backfill            # ~1.4y of 1h, 5.5y of 4h
 .venv/Scripts/python.exe -m src.main experiment001
+
+# Phase 8 — backtest golden-pocket TRADES after fees + slippage:
+.venv/Scripts/python.exe -m src.main backtest
+.venv/Scripts/python.exe -m src.main backtest --min-rr 1.5 --fee-bps 10 --slippage-bps 5
 ```
+
+### What the backtest found (BTC/ETH/SOL, 1h + 4h, ~1.4–5.5y, 0.30% round-trip cost)
+
+> **NOT TRADABLE.** The naive golden-pocket rule (enter the 0.618–0.786 pocket,
+> stop at the swing origin, target the swing terminal) returns **≈ −0.77R per
+> trade after costs** — *worse* than random entries (−0.26R) and crushed by
+> buy-and-hold (+790%). Stops hit 67% of the time; filtering for higher
+> reward:risk makes it *worse* (deep-retracement setups are reversal traps).
+> This is the expected fate of most sacred ideas — and exactly why we backtest
+> before risking anything. Reports land in `data/reports/`.
+
+Note: the pooled total-return / equity-curve figures assume one account trading
+all six markets sequentially, so per-trade **expectancy** is the robust statistic
+to compare on, not the headline total return.
 
 The report lands in `data/reports/EXP_001_GOLDEN_POCKET.md` and prints to stdout.
 
@@ -68,11 +92,11 @@ a permutation p-value, and prints a blunt verdict:
 
 ## Roadmap (next phases)
 
-Phase 8 backtest (vectorbt), Phase 9 Binance testnet execution + risk manager
-(gated by `ENVIRONMENT=testnet` and `ALLOW_LIVE_TRADING=false`), Phase 10
-dashboard + "Myth Detector". New geometry modules (Gann, Square of Nine,
-harmonics, time cycles, circles, vortex) each implement the same
-`GeometryModule` interface and reuse the controls + labeller unchanged.
+Phase 9 Binance testnet execution + risk manager (gated by `ENVIRONMENT=testnet`
+and `ALLOW_LIVE_TRADING=false`), Phase 10 dashboard + "Myth Detector". New
+geometry modules (Gann, Square of Nine, harmonics, time cycles, circles, vortex)
+each implement the same `GeometryModule` interface and reuse the controls,
+labeller, and backtest engine unchanged.
 
 ## Project layout
 
@@ -83,6 +107,7 @@ src/market_structure/  features, pivots
 src/geometry/  base interface, fibonacci
 src/signals/   controls / baselines
 src/research/  outcome labeller, stats, reports
-src/main.py    CLI: backfill | observe | experiment001
+src/backtest/  trade engine, metrics, walk-forward, runner
+src/main.py    CLI: backfill | observe | experiment001 | backtest
 tests/         pytest suite
 ```

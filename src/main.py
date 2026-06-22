@@ -57,7 +57,9 @@ def get_candles(settings, store, symbol, timeframe, synthetic: bool,
         return generate_candles(symbol, timeframe, n=synth_n)
     df = store.load_candles(symbol, timeframe)
     if df.empty:
-        client = ExchangeClient(settings.exchange_name, sandbox=settings.sandbox)
+        # Market data always comes from PRODUCTION (public, keyless). The sandbox
+        # flag governs trading only — testnet has almost no candle history.
+        client = ExchangeClient(settings.exchange_name, sandbox=False)
         collector = CandleCollector(client)
         df = collector.backfill(symbol, timeframe, limit=settings.backfill_limit)
         store.upsert_candles(symbol, timeframe, df)
@@ -66,14 +68,33 @@ def get_candles(settings, store, symbol, timeframe, synthetic: bool,
 
 def cmd_backfill(settings, args):
     store = get_store(settings)
-    client = ExchangeClient(settings.exchange_name, sandbox=settings.sandbox)
+    # production endpoint for candle history (sandbox/testnet has none)
+    client = ExchangeClient(settings.exchange_name, sandbox=False)
     collector = CandleCollector(client)
+    limit = args.limit or settings.backfill_limit
     for symbol in settings.symbols:
         for tf in settings.timeframes:
-            df = collector.backfill(symbol, tf, limit=settings.backfill_limit)
+            df = collector.backfill(symbol, tf, limit=limit)
             store.upsert_candles(symbol, tf, df)
             gaps = find_gaps(df, tf)
-            print(f"{symbol} {tf}: {len(df)} candles, {len(gaps)} gaps")
+            span = (df["timestamp"].iloc[-1] - df["timestamp"].iloc[0]) if len(df) else None
+            yrs = f"{span.days / 365:.2f}y" if span is not None else "—"
+            print(f"{symbol} {tf}: {len(df)} candles ({yrs}), {len(gaps)} gaps")
+
+
+def cmd_backtest(settings, args):
+    from src.backtest.engine import BacktestParams
+    from src.backtest import runner
+
+    params = BacktestParams(fee_bps=args.fee_bps, slippage_bps=args.slippage_bps,
+                            risk_pct=args.risk_pct, max_hold=args.max_hold,
+                            min_rr=args.min_rr)
+    result = runner.run(settings, args.synthetic, params)
+    text = runner.build_report(result)
+    out_path = Path(settings.path("duckdb_path")).parent / "reports" / "EXP_001_BACKTEST.md"
+    reports.write_report(text, out_path)
+    print(text)
+    print(f"\nReport written to: {out_path}")
 
 
 def _run_pipeline(settings, store, symbol, tf, synthetic, controls_list, persist=True):
@@ -162,6 +183,8 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_b = sub.add_parser("backfill", help="harvest historical candles")
+    p_b.add_argument("--limit", type=int, default=None,
+                     help="candles per market (overrides config; ~8760 = 1y of 1h)")
     p_b.set_defaults(func=cmd_backfill)
 
     p_o = sub.add_parser("observe", help="one observer pass, log events + outcomes")
@@ -171,6 +194,15 @@ def main(argv=None):
     p_e = sub.add_parser("experiment001", help="run golden-pocket experiment + report")
     p_e.add_argument("--synthetic", action="store_true", help="use offline generated candles")
     p_e.set_defaults(func=cmd_experiment001)
+
+    p_t = sub.add_parser("backtest", help="simulate golden-pocket trades + report")
+    p_t.add_argument("--synthetic", action="store_true", help="use offline generated candles")
+    p_t.add_argument("--fee-bps", type=float, default=10.0, dest="fee_bps")
+    p_t.add_argument("--slippage-bps", type=float, default=5.0, dest="slippage_bps")
+    p_t.add_argument("--risk-pct", type=float, default=0.005, dest="risk_pct")
+    p_t.add_argument("--max-hold", type=int, default=50, dest="max_hold")
+    p_t.add_argument("--min-rr", type=float, default=0.0, dest="min_rr")
+    p_t.set_defaults(func=cmd_backtest)
 
     args = parser.parse_args(argv)
     settings = load_settings()

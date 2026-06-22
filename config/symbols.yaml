@@ -7,5 +7,6 @@ timeframes:
   - 1h
   - 4h
 
-# how many candles to backfill per (symbol, timeframe) on a fresh harvest
-backfill_limit: 5000
+# how many candles to backfill per (symbol, timeframe) on a fresh harvest.
+# 12000 covers ~1.4y of 1h candles (and many years of 4h) — comfortably >= 1 year.
+backfill_limit: 12000
