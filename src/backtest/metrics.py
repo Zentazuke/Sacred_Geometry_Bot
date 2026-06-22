@@ -15,11 +15,17 @@ METRIC_KEYS = [
 
 
 def equity_curve(trades: pd.DataFrame, risk_pct: float) -> np.ndarray:
-    """Compounded equity (starting at 1.0) from sequential per-trade R outcomes."""
+    """Compounded equity (starting at 1.0) from sequential per-trade R outcomes.
+
+    A single trade cannot lose more than the whole account, so each multiplier is
+    floored at 0 (ruin). This keeps total return >= -100% and drawdown <= 100%,
+    instead of the nonsensical sub-zero equity a raw cumprod produces when a tiny
+    stop makes costs dwarf the risked amount."""
     if trades.empty:
         return np.array([1.0])
     per_trade = risk_pct * trades.sort_values("entry_time")["r_net"].values
-    return np.concatenate([[1.0], np.cumprod(1.0 + per_trade)])
+    mult = np.maximum(0.0, 1.0 + per_trade)      # can't go below total ruin
+    return np.concatenate([[1.0], np.cumprod(mult)])
 
 
 def _max_drawdown(eq: np.ndarray) -> float:

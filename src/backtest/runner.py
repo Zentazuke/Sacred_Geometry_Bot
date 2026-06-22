@@ -15,6 +15,7 @@ from ..data.candle_store import CandleStore
 from ..data.exchange_client import ExchangeClient
 from ..data.synthetic import generate_candles
 from ..geometry.fibonacci import golden_pocket_events
+from ..geometry.gann import gann_events
 from ..market_structure.features import add_features
 from ..market_structure.pivots import detect_pivots
 from ..signals.controls import build_controls
@@ -35,7 +36,14 @@ def _get_candles(settings, store, symbol, timeframe, synthetic, synth_n=10000):
     return df
 
 
-def run(settings, synthetic: bool, params: BacktestParams) -> dict:
+def _make_events(geometry, feat, symbol, tf, pivots):
+    if geometry == "gann":
+        return gann_events(feat, symbol, tf, pivots)
+    return golden_pocket_events(feat, symbol, tf, pivots)
+
+
+def run(settings, synthetic: bool, params: BacktestParams,
+        geometry: str = "golden_pocket") -> dict:
     store = CandleStore(settings.path("raw_dir"), settings.path("duckdb_path"))
     exp = settings.experiments.get("EXP_001_GOLDEN_POCKET", {})
     pivot_method = exp.get("pivot_method", "zigzag")
@@ -51,18 +59,19 @@ def run(settings, synthetic: bool, params: BacktestParams) -> dict:
             feat = add_features(df)
             pivots = detect_pivots(feat, symbol, tf, pivot_method, settings.pivots)
 
-            golden = golden_pocket_events(feat, symbol, tf, pivots)
-            strat_trades.append(simulate_trades(golden, feat, params))
+            events = _make_events(geometry, feat, symbol, tf, pivots)
+            strat_trades.append(simulate_trades(events, feat, params))
 
             controls = build_controls(feat, symbol, tf, pivots, ["random_entry"],
-                                      n_golden=len(golden))
+                                      n_golden=len(events))
             ctrl_trades.append(simulate_trades(controls.get("random_entry",
-                               golden.iloc[0:0]), feat, params))
+                               events.iloc[0:0]), feat, params))
 
             span_years = (feat["timestamp"].iloc[-1] - feat["timestamp"].iloc[0]) \
                 / np.timedelta64(365, "D")
             bh = feat["close"].iloc[-1] / feat["close"].iloc[0] - 1.0
-            buyhold.append({"market": f"{symbol} {tf}", "return": bh, "years": span_years})
+            buyhold.append({"coin": symbol, "tf": tf, "market": f"{symbol} {tf}",
+                            "return": bh, "years": span_years})
             coverage.append({"market": f"{symbol} {tf}", "candles": len(feat),
                              "years": round(span_years, 2),
                              "from": feat["timestamp"].iloc[0],
@@ -73,6 +82,7 @@ def run(settings, synthetic: bool, params: BacktestParams) -> dict:
     years = np.mean([c["years"] for c in coverage]) if coverage else 1.0
 
     return {
+        "geometry": geometry,
         "params": params,
         "coverage": pd.DataFrame(coverage),
         "buyhold": pd.DataFrame(buyhold),
@@ -80,10 +90,25 @@ def run(settings, synthetic: bool, params: BacktestParams) -> dict:
         "control_trades": ctrl,
         "strategy_metrics": compute_metrics(strat, params.risk_pct, years),
         "control_metrics": compute_metrics(ctrl, params.risk_pct, years),
+        "per_market_metrics": _grouped_metrics(strat, ["symbol", "timeframe"], params.risk_pct),
+        "per_coin_metrics": _grouped_metrics(strat, ["symbol"], params.risk_pct),
         "segments": segment_metrics(strat, params.risk_pct, n_segments=4),
         "oos": in_out_of_sample(strat, params.risk_pct),
         "avg_years": years,
     }
+
+
+def _grouped_metrics(trades, by, risk_pct) -> pd.DataFrame:
+    """Full metric set computed independently for each group (coin or coin+tf)."""
+    if trades.empty:
+        return pd.DataFrame()
+    rows = []
+    for key, g in trades.groupby(by):
+        label = key if isinstance(key, str) else " ".join(key)
+        m = compute_metrics(g, risk_pct)
+        gross_pnl_R = float(g["r_net"].sum())          # cumulative R, before sizing
+        rows.append({"group": label, **m, "sum_r": gross_pnl_R})
+    return pd.DataFrame(rows).sort_values("expectancy_r", ascending=False)
 
 
 def _concat(frames):
@@ -101,11 +126,30 @@ def _row(name, m):
             f"{pct(m['max_drawdown'])} | {m['sharpe']:.2f} |")
 
 
+def _metrics_table(df: pd.DataFrame, group_header: str) -> list[str]:
+    """Render a full-metric table, one row per group, sorted by expectancy."""
+    L = []
+    cols = (f"| {group_header} | trades | win | expectancy | PF | sumR | total | "
+            f"annual | maxDD | Calmar | Sharpe | Sortino | tgt/stop/to |")
+    L.append(cols)
+    L.append("|" + "---|" * 13)
+    for _, r in df.iterrows():
+        L.append(
+            f"| {r['group']} | {int(r['n_trades'])} | {r['win_rate']*100:.1f}% | "
+            f"{r['expectancy_r']:+.3f}R | {r['profit_factor']:.2f} | {r['sum_r']:+.0f}R | "
+            f"{r['total_return']*100:+.1f}% | {r['annual_return']*100:+.1f}% | "
+            f"{r['max_drawdown']*100:.1f}% | {r['calmar']:.2f} | {r['sharpe']:.2f} | "
+            f"{r['sortino']:.2f} | "
+            f"{r['target_rate']*100:.0f}/{r['stop_rate']*100:.0f}/{r['timeout_rate']*100:.0f}% |")
+    return L
+
+
 def build_report(result: dict) -> str:
     p = result["params"]
     sm, cm = result["strategy_metrics"], result["control_metrics"]
+    geo = result.get("geometry", "golden_pocket")
     L = []
-    L.append("# EXP_001 — Golden-Pocket Backtest")
+    L.append(f"# Backtest — `{geo}` strategy, per-coin P/L")
     L.append("")
     L.append(f"Costs: {p.fee_bps:.0f} bps fee + {p.slippage_bps:.0f} bps slippage per side "
              f"(round trip {p.round_trip_cost * 100:.2f}%). "
@@ -128,7 +172,7 @@ def build_report(result: dict) -> str:
     L.append("")
     L.append("| strategy | trades | win | expectancy | PF | total | annual | maxDD | Sharpe |")
     L.append("|---|---|---|---|---|---|---|---|---|")
-    L.append(_row("golden_pocket", sm))
+    L.append(_row(geo, sm))
     L.append(_row("random_entry", cm))
     L.append("")
     bh = result["buyhold"]
@@ -137,7 +181,32 @@ def build_report(result: dict) -> str:
                  f"{bh['return'].mean() * 100:+.1f}% total.")
         L.append("")
 
-    L.append("## Exit breakdown (golden pocket)")
+    # ---- per-coin P/L (the headline question) ---------------------------
+    pcm = result.get("per_coin_metrics")
+    if pcm is not None and not pcm.empty:
+        bh_by_coin = (result["buyhold"].groupby("coin")["return"].mean().to_dict()
+                      if not bh.empty else {})
+        L.append("## Profit / loss per coin (1h + 4h combined)")
+        L.append("")
+        L += _metrics_table(pcm, "coin")
+        L.append("")
+        L.append("Buy & hold per coin over the same window (the benchmark every strategy "
+                 "is competing with):")
+        L.append("")
+        L.append("| coin | buy & hold |")
+        L.append("|---|---|")
+        for coin, ret in sorted(bh_by_coin.items(), key=lambda kv: -kv[1]):
+            L.append(f"| {coin} | {ret*100:+.0f}% |")
+        L.append("")
+
+    pmm = result.get("per_market_metrics")
+    if pmm is not None and not pmm.empty:
+        L.append("## Profit / loss per coin × timeframe")
+        L.append("")
+        L += _metrics_table(pmm, "market")
+        L.append("")
+
+    L.append(f"## Exit breakdown (pooled, {geo})")
     L.append(f"- target hit: {sm.get('target_rate', 0) * 100:.1f}%  |  "
              f"stop hit: {sm.get('stop_rate', 0) * 100:.1f}%  |  "
              f"timeout: {sm.get('timeout_rate', 0) * 100:.1f}%")
@@ -167,10 +236,40 @@ def build_report(result: dict) -> str:
                  f"(win {o['win_rate'] * 100:.1f}%, {o['n_trades']} trades)")
         L.append("")
 
+    L.append("## Metrics glossary")
+    L += _GLOSSARY
+    L.append("")
+
     L.append("## Verdict")
     L.append(_verdict(sm, cm))
     L.append("")
     return "\n".join(L)
+
+
+_GLOSSARY = [
+    "",
+    "- **trades** — number of completed trades (one per geometry signal that found an entry).",
+    "- **win** — fraction of trades with a positive net return after costs.",
+    "- **expectancy (R)** — average profit per trade in units of *risk* (R). 1R = the amount "
+    "risked, i.e. the distance from entry to stop. +0.2R means each trade nets a fifth of what "
+    "it risked, on average. This is the single most important number; it is scale-free and "
+    "directly comparable across coins.",
+    "- **PF (profit factor)** — gross R won / gross R lost. >1 is profitable; 1.0 is break-even.",
+    "- **sumR** — cumulative R across all the group's trades (total edge harvested, before "
+    "position sizing).",
+    "- **total** — compounded account return, risking `risk/trade` of equity per trade. NOTE: "
+    "this assumes one account trading that group's signals sequentially, so it punishes "
+    "over-trading; judge edge on *expectancy*, not this.",
+    "- **annual** — total return annualised over the group's time span.",
+    "- **maxDD (max drawdown)** — largest peak-to-trough equity drop, as a %. Lower is better.",
+    "- **Calmar** — annual return / max drawdown. Reward per unit of worst-case pain.",
+    "- **Sharpe** — mean per-trade return / its standard deviation, annualised. Risk-adjusted "
+    "return; >1 is good, negative means losing.",
+    "- **Sortino** — like Sharpe but only penalises *downside* volatility.",
+    "- **tgt/stop/to** — share of trades exited at target / stop / timeout (max-hold reached).",
+    "- **buy & hold** — return from simply buying at the start and holding to the end; the "
+    "benchmark any active strategy must beat to justify the effort and risk.",
+]
 
 
 def _verdict(sm, cm) -> str:

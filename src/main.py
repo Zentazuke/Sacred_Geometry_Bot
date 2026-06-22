@@ -100,9 +100,10 @@ def cmd_backtest(settings, args):
     params = BacktestParams(fee_bps=args.fee_bps, slippage_bps=args.slippage_bps,
                             risk_pct=args.risk_pct, max_hold=args.max_hold,
                             min_rr=args.min_rr)
-    result = runner.run(settings, args.synthetic, params)
+    result = runner.run(settings, args.synthetic, params, geometry=args.geometry)
     text = runner.build_report(result)
-    out_path = Path(settings.path("duckdb_path")).parent / "reports" / "EXP_001_BACKTEST.md"
+    out_path = (Path(settings.path("duckdb_path")).parent / "reports"
+                / f"BACKTEST_{args.geometry}.md")
     reports.write_report(text, out_path)
     print(text)
     print(f"\nReport written to: {out_path}")
@@ -213,6 +214,8 @@ def main(argv=None):
     p_t.add_argument("--risk-pct", type=float, default=0.005, dest="risk_pct")
     p_t.add_argument("--max-hold", type=int, default=50, dest="max_hold")
     p_t.add_argument("--min-rr", type=float, default=0.0, dest="min_rr")
+    p_t.add_argument("--geometry", choices=["golden_pocket", "gann"],
+                     default="golden_pocket", help="which geometry to trade")
     p_t.set_defaults(func=cmd_backtest)
 
     p_s = sub.add_parser("sweep", help="grid coins x timeframes x geometry; myth detector")
